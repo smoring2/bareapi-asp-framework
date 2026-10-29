@@ -1,23 +1,32 @@
-using static util.Util;
-using static System.Configuration.ConfigurationManager;
-
 using System.Data;
-using System.Linq;
-using System.Net.Http;
-using System.Data.SqlClient;
 using System.Threading.Tasks;
 using System.Collections.Generic;
 
-namespace auth {
-  static class Auth {
+using Microsoft.Data.SqlClient;
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Configuration;
 
-    public static async Task<int?> SessionUser(string key) {
+namespace auth {
+  public interface IAuth {
+    Task<int?> SessionUser(string key);
+    Task<int?> SessionUser(HttpRequest request);
+    Task SessionClear(int? userid);
+    Task<string> SessionSet(int userid);
+  }
+
+  public sealed class Auth: IAuth {
+    private readonly string _connectionString;
+
+    public Auth(IConfiguration configuration) {
+      _connectionString = configuration.GetConnectionString("dbconn");
+    }
+
+    public async Task<int?> SessionUser(string key) {
       if (key == null) {
         return null;
       }
 
-      using (var conn = new SqlConnection(
-        ConnectionStrings["dbconn"].ConnectionString)) {
+      using (var conn = new SqlConnection(_connectionString)) {
         await conn.OpenAsync();
 
         using (var cmd = conn.CreateCommand()) {
@@ -30,14 +39,12 @@ namespace auth {
       }
     }
 
-    public static async Task<int?> SessionUser(HttpRequestMessage request) {
-      return await SessionUser(
-        request.Headers.GetCookies("_id").FirstOrDefault()?["_id"].Value);
+    public async Task<int?> SessionUser(HttpRequest request) {
+      return await SessionUser(request.Cookies["_id"]);
     }
 
-    public static async void SessionClear(int? userid) {
-      using (var conn =
-        new SqlConnection(ConnectionStrings["dbconn"].ConnectionString)) {
+    public async Task SessionClear(int? userid) {
+      using (var conn = new SqlConnection(_connectionString)) {
         await conn.OpenAsync();
 
         using (var cmd = conn.CreateCommand()) {
@@ -55,11 +62,10 @@ namespace auth {
       }
     }
 
-    public static async Task<string> SessionSet(int userid) {
+    public async Task<string> SessionSet(int userid) {
       string guid = "";
 
-      using (var conn = new SqlConnection(
-            ConnectionStrings["dbconn"].ConnectionString)) {
+      using (var conn = new SqlConnection(_connectionString)) {
         await conn.OpenAsync();
 
         var q = "select token from sesion where token=@key";

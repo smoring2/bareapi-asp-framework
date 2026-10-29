@@ -42,31 +42,20 @@ purge() {
 }
 
 cln() {
-  msbuild api.csproj \
-    -v:q \
-    -t:clean > /dev/null
-    #-maxcpucount:4 \
+  dotnet clean api.csproj -c Release -v:q > /dev/null
 }
 
 bld() {
-  msbuild api.csproj \
-    -v:q \
-    -t:build
-    #-maxcpucount:4 \
-    #-p:WarningLevel=0 \
+  dotnet build api.csproj -c Release -v:q
 }
 
 xxx() {
-  pushd bin/Release/
-    echo -e '\e[0;96m||||||||||||||||||||||||||||||||||||||||||||||||||\e[0m\n'
-    ./api.exe
-  popd
+  echo -e '\e[0;96m||||||||||||||||||||||||||||||||||||||||||||||||||\e[0m\n'
+  dotnet run --project api.csproj -c Release
 }
 
 update() {
-  nuget install Microsoft.AspNet.WebApi.Owin -OutputDirectory packages
-  nuget install Microsoft.Owin.Hosting -OutputDirectory packages
-  nuget install Microsoft.Owin.Host.HttpListener -OutputDirectory packages
+  dotnet restore api.csproj
 }
 
 typeset -A opts

@@ -1,51 +1,41 @@
-# Barebones ASP.NET Framework Web API 2 with OWIN
+# Barebones ASP.NET Core Web API (Kestrel self-host)
 
-A minimal, self-hosted OWIN-based Web API for .NET Framework 4.8, built from
-scratch on top of a Console application, without relying on Visual Studio or
-IIS. This project aims to demonstrate how the different ASP.NET components fit
-together and integrate with the OWIN/Katana pipeline.
+A minimal, self-hosted Web API for .NET 10, built from scratch on top of a
+Console application, without relying on Visual Studio or IIS. This project aims
+to demonstrate how the different ASP.NET Core components fit together in the
+`WebApplication`/Kestrel middleware pipeline.
 
 ## Features
-+ Builds on the bare minimum .NET Framework 4.8 Console application.
-+ Self-hosted OWIN-based Web API with all startup logic contained in a single
-file (api.cs).
++ Builds on the bare minimum .NET 10 Console application (`OutputType=Exe`).
++ Self-hosted Kestrel-based Web API with all startup logic contained in a single
+file (Program.cs).
 + Implements a simple cookie based user authentication / session using raw http
 headers, backed by a session table in the database.
 + Avoids the complexity and ceremony of Dapper/EFCore/ORMs in favor of raw sql
 queries/ADO.NET.
 
 ### Notes
-+ Developed on MSYS2 using the standalone
-[JetBrains redistributable of
-MSBuild](https://blog.jetbrains.com/dotnet/2018/04/13/introducing-jetbrains-redistributable-msbuild/).
-You can also use the MSBuild executable that is included with Visual Studio if
-you have it installed. Just include the full path to the MSBuild exe in a
-script, something like this.
-
++ Built and run with the .NET SDK (10.0 or later) — no Visual Studio required:
 
 ```shell
 #!/usr/bin/zsh
 set -euo pipefail
 
-/c/Program\ Files\ \(x86\)/Microsoft\ Visual\ Studio/2019/Professional/MSBuild/\
-Current/Bin/amd64/MSBuild.exe ${@}
-
-# or
-
-# /path to JetBrains redistributable MSBuild/MSBuild.exe ${@}
+dotnet build api.csproj
+dotnet run --project api.csproj
 
 ```
 + Tested with `Microsoft SQL Server 2019 (RTM) - 15.0.2000.5 (X64)`.
 + Needs MultipleActiveResultSets to be enabled, so include
 `MultipleActiveResultSets=true` in your connection string.
-+ Listening host and port need to be defined in a `app_settings.config` file in
-root. See `sample_app_settings.config`.
-+ Database connection string to be defined in a `connection_strings.config`
-file in root. See `sample_connection_strings.config`.
++ Listening host and port, plus the database connection string, are defined in
+an `appsettings.json` file in root. See `sample_appsettings.json`. Any of these
+can also be supplied via environment variables (e.g.
+`ConnectionStrings__dbconn`) or command-line arguments.
 +  x.sh is a simple shell script is intended to be run in a zsh shell on
 MSYS2/Cygwin.
-Reading it should help you understand how to use MSBuild to build and run this
-project from any cli such as Powershell or cmd.
+Reading it should help you understand how to use the `dotnet` CLI to build and
+run this project from any cli such as Powershell or cmd.
 
 ## Endpoints
 

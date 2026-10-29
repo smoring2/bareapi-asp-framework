@@ -1,74 +1,44 @@
 using auth;
 using static util.Util;
-using static System.Configuration.ConfigurationManager;
+
 using System;
-using System.Net;
+using Microsoft.AspNetCore.Http;
 using System.Data;
 using System.Linq;
-using System.Net.Http;
-using System.Web.Http;
-using System.Data.SqlClient;
 using System.Threading.Tasks;
 using System.Collections.Generic;
-using System.Net.Http.Formatting;
 using System.ComponentModel.DataAnnotations;
-using Owin;
+
+using Microsoft.Data.SqlClient;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Options;
 using Newtonsoft.Json.Linq;
-using Microsoft.Owin.Hosting;
 
-sealed class XXX {
-  public static async Task Main(string[] args) {
-    cl(String.Join("", collatz(new int[]{(new Random()).Next(1, 79)})
-        .Select(e => $@"[;38;5;{e % 256};1m|")) + @"[0m");
+[ApiController]
+public sealed class XXXController: ControllerBase {
+  private readonly IAuth _auth;
+  private readonly ApiHostOptions _hostOptions;
+  private readonly string _connectionString;
 
-    var url = $"http://{AppSettings["host"]}:{AppSettings["port"]}";
-
-    using (WebApp.Start<Startup>(url)) {
-      Console.WriteLine(":: listening on " + url);
-      await Task.Delay(-1);
-    }
+  public XXXController(
+    IAuth auth,
+    IOptions<ApiHostOptions> hostOptions,
+    IConfiguration configuration
+  ) {
+    _auth = auth;
+    _hostOptions = hostOptions.Value;
+    _connectionString = configuration.GetConnectionString("dbconn");
   }
-}
 
-sealed class Startup {
-  private static readonly string[] noauth = {
-    "login", "hailstone", "ecco", "env", "now"
-  }; 
-
-  public void Configuration(IAppBuilder app) {
-    var config = new HttpConfiguration();
-    config.MapHttpAttributeRoutes();
-    config.Formatters.Clear();
-    config.Formatters.Add(new JsonMediaTypeFormatter());
-
-    app.Use(async (ctx, next) => {
-      if ((await Auth.SessionUser(ctx.Request.Cookies["_id"]) != null)
-        || noauth.Contains(ctx.Request.Path.ToString().Substring(1))) {
-        cl($"[;38;5;27;1m[{ctx.Request.Path}][0m");
-        await next();
-      } else {
-        cl($"[;38;5;9;1m[{ctx.Request.Path}][0m");
-        ctx.Response.StatusCode = 403;
-        ctx.Response.ReasonPhrase = "Not Authorized";
-        ctx.Response.ContentType = "application/json";
-        await ctx.Response.WriteAsync("{\"error\": \"verboten\"}");
-      }
-    });
-
-    config.EnsureInitialized();
-    app.UseWebApi(config);
-  }
-}
-
-public sealed class XXXController: ApiController {
   [HttpPost]
   [Route("env")]
-  public async Task<IHttpActionResult> _env() =>
+  public async Task<IActionResult> _env() =>
     Ok(await Task.Run(() => env()));
 
   [HttpPost]
   [Route("ecco")]
-  public async Task<IHttpActionResult> _echo(JObject o) {
+  public async Task<IActionResult> _echo([FromBody] JObject o) {
     if (o.Value<int>("delay") is int n && n > 0) {
       await Task.Delay(n);
     }
@@ -80,23 +50,22 @@ public sealed class XXXController: ApiController {
 
   [HttpPost]
   [Route("userid")]
-  public async Task<IHttpActionResult> _session_user() {
-    var userid = await Auth.SessionUser(Request);
+  public async Task<IActionResult> _session_user() {
+    var userid = await _auth.SessionUser(Request);
     return Ok(new {userid});
   }
 
   [HttpPost]
   [Route("hailstone")]
-  public IHttpActionResult _hailstone(JObject o) =>
+  public IActionResult _hailstone([FromBody] JObject o) =>
     Ok((o.Value<int>("n") is int n && n > 0) ? collatz(new int[]{n}) : null);
 
   [HttpPost]
   [Route("now")]
-  public async Task<IHttpActionResult> _now() {
+  public async Task<IActionResult> _now() {
     IDictionary<string, object> database;
 
-    using (var conn = new SqlConnection(
-      ConnectionStrings["dbconn"].ConnectionString)) {
+    using (var conn = new SqlConnection(_connectionString)) {
       await conn.OpenAsync();
 
       using (var cmd = conn.CreateCommand()) {
@@ -115,7 +84,7 @@ public sealed class XXXController: ApiController {
     var ut = DateTimeOffset.UtcNow;
 
     return Ok(new {
-      user = await Auth.SessionUser(Request),
+      user = await _auth.SessionUser(Request),
       server = new {
         tz = TimeZoneInfo.Local.DisplayName,
         local = ut.ToLocalTime().ToString(),
@@ -128,14 +97,14 @@ public sealed class XXXController: ApiController {
 
   [HttpPost]
   [Route("login")]
-  public async Task<HttpResponseMessage> _login(ModelLogin login) {
-    if (await Auth.SessionUser(Request) != null) {
-      return Request.CreateResponse(HttpStatusCode.OK);
+  public async Task<IActionResult> _login([FromBody] ModelLogin login) {
+    if (await _auth.SessionUser(Request) != null) {
+      return Ok();
     }
 
     if (!ModelState.IsValid) {
-      return Request.CreateResponse(
-        HttpStatusCode.Forbidden,
+      return StatusCode(
+        403,
         ModelState
           .Values.SelectMany(v => v.Errors.Select(b => b.ErrorMessage))
           .Where(e => e != "")
@@ -144,8 +113,7 @@ public sealed class XXXController: ApiController {
 
     IDictionary<string, object> user;
 
-    using (var conn = new SqlConnection(
-      ConnectionStrings["dbconn"].ConnectionString)) {
+    using (var conn = new SqlConnection(_connectionString)) {
       await conn.OpenAsync();
 
       using (var user_cmd = conn.CreateCommand()) {
@@ -169,42 +137,40 @@ public sealed class XXXController: ApiController {
               Convert.FromBase64String(arr[1])
             ))
       ) {
-      return Request.CreateResponse(
-        HttpStatusCode.Forbidden,
+      return StatusCode(
+        403,
         new {error = "incorrect user/pass"}
       );
     }
 
     int userid = (int) user["id"];
-    Auth.SessionClear(userid);
-    var response = Request.CreateResponse(HttpStatusCode.OK);
+    await _auth.SessionClear(userid);
 
-    response.Headers.Add("set-cookie", "_id="
-      + await Auth.SessionSet(userid)
-      + ";domain=" + AppSettings["host"]
+    Response.Headers.Append("set-cookie", "_id="
+      + await _auth.SessionSet(userid)
+      + ";domain=" + _hostOptions.host
       + ";path=/;httponly;samesite=lax;max-age=604800"
     );
 
-    return response;
+    return Ok();
   }
 
   [HttpPost]
   [Route("logout")]
-  public async Task<HttpResponseMessage> _logout() {
-    Auth.SessionClear(await Auth.SessionUser(Request));
-    var response = Request.CreateResponse(HttpStatusCode.OK);
+  public async Task<IActionResult> _logout() {
+    await _auth.SessionClear(await _auth.SessionUser(Request));
 
-    response.Headers.Add("set-cookie", "_id="
-      + ";domain=" + AppSettings["host"]
+    Response.Headers.Append("set-cookie", "_id="
+      + ";domain=" + _hostOptions.host
       + ";path=/;httponly;samesite=lax;max-age=0"
     );
 
-    return response;
+    return Ok();
   }
 
 }
 
-public struct ModelLogin {
+public sealed class ModelLogin {
   [Required(ErrorMessage = "username cannot be blank")]
   public string username {get; set;}
 
