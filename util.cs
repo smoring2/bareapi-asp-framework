@@ -1,7 +1,7 @@
 using System;
 using System.Data;
 using System.Linq;
-using System.Data.SqlClient;
+using Microsoft.Data.SqlClient;
 using System.Collections.Generic;
 using System.Security.Cryptography;
 using System.Runtime.CompilerServices;
@@ -61,12 +61,13 @@ namespace util {
     }
 
     public static byte[] deriveKey(string password, byte[] salt) =>
-      (new Rfc2898DeriveBytes(
+      Rfc2898DeriveBytes.Pbkdf2(
         password: password,
         salt: salt,
         iterations: 100000,
-        hashAlgorithm: HashAlgorithmName.SHA512
-      )).GetBytes(32);
+        hashAlgorithm: HashAlgorithmName.SHA512,
+        outputLength: 32
+      );
 
   }
 }
